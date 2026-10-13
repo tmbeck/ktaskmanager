@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=KDE Task Manager
+GenericName=Task Manager
+Comment=Windows 7 style Task Manager
+Exec=ktaskmanager
+Icon=utilities-system-monitor
+Categories=Qt;KDE;System;Monitor;
+Keywords=process;task;kill;cpu;memory;

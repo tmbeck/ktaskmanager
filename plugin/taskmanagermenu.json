@@ -1,0 +1,8 @@
+{
+    "KPlugin": {
+        "Id": "org.kde.ktaskmanagermenu",
+        "Name": "Standard Menu + Task Manager",
+        "Description": "The standard context menu with a Task Manager entry, like Windows",
+        "Icon": "utilities-system-monitor"
+    }
+}
