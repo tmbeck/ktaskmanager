@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
 """KDE Task Manager — a task manager for Plasma styled after the Windows one (PyQt6 + psutil).
 
-Options > Style switches between the Windows 2000, Windows 7 and Windows 10 looks.
+Options > Style switches between the Windows 2000, Windows 7 and Windows 10 looks, and KDE Native
+(the Windows 10 layout drawn with your Plasma theme).
 """
 import atexit
 import configparser

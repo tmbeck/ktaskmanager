@@ -1,0 +1,15 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Make the panel's right-click menu offer "Task Manager" (or put the stock menu back with --disable).
+set -e
+rc=~/.config/plasma-org.kde.plasma.desktop-appletsrc
+key="RightButton;NoModifier"
+want=org.kde.ktaskmanagermenu
+[ "$1" = --disable ] && want=org.kde.contextmenu
+if [ "$(kreadconfig6 --file "$rc" --group ActionPlugins --group 1 --key "$key")" != "$want" ]; then
+    # plasmashell rewrites its config on exit, so edit while it's stopped. [ActionPlugins][1] = panels.
+    systemctl --user stop plasma-plasmashell
+    kwriteconfig6 --file "$rc" --group ActionPlugins --group 1 --key "$key" "$want"
+    systemctl --user start plasma-plasmashell
+fi
+echo "Panel right-click menu: $want"

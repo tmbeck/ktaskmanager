@@ -1,0 +1,4 @@
+post_install() {
+  echo "To add Task Manager to the panel's right-click menu, run (as your user): ktaskmanager-enable-panel-menu"
+  echo "Before uninstalling, put the stock menu back with: ktaskmanager-enable-panel-menu --disable"
+}

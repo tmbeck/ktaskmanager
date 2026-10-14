@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 // Panel right-click menu: "Task Manager" on top of the stock org.kde.contextmenu actions.
 #include <KConfigGroup>
 #include <KPluginFactory>

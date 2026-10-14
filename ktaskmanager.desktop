@@ -2,7 +2,7 @@
 Type=Application
 Name=KDE Task Manager
 GenericName=Task Manager
-Comment=Windows 7 style Task Manager
+Comment=Task manager in the style of Windows 2000, 7 and 10
 Exec=ktaskmanager
 Icon=utilities-system-monitor
 Categories=Qt;KDE;System;Monitor;

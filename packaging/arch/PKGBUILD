@@ -1,0 +1,27 @@
+# Maintainer: Tim Beck <tmbeck@gmail.com>
+pkgname=ktaskmanager
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Windows 2000/7/10-style task manager for KDE Plasma, with a panel right-click entry"
+arch=(x86_64)
+url="https://github.com/tmbeck/ktaskmanager"
+license=(GPL-2.0-or-later)
+depends=(python python-pyqt6 python-psutil libplasma kconfig kcoreaddons qt6-base util-linux)
+makedepends=(cmake)
+optdepends=('libksysguard: per-process network usage'
+            'nvidia-utils: NVIDIA GPU usage'
+            'plasma-systemmonitor: "Open Resource Monitor" button'
+            'qt6-tools: Users > Log off (qdbus6)')
+install=ktaskmanager.install
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+sha256sums=('SKIP')  # run updpkgsums after tagging the release
+
+build() {
+  cmake -S "$pkgname-$pkgver/plugin" -B build -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=None -Wno-dev
+  cmake --build build
+}
+
+package() {
+  DESTDIR="$pkgdir" cmake --install build
+  install -Dm644 "$pkgname-$pkgver/LICENSE" -t "$pkgdir/usr/share/licenses/$pkgname"
+}

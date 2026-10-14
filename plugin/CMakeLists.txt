@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(ktaskmanager LANGUAGES CXX)
+project(ktaskmanager VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_CXX_STANDARD 20)
 find_package(Qt6 REQUIRED COMPONENTS Core Gui)
@@ -13,4 +13,5 @@ target_link_libraries(org.kde.ktaskmanagermenu Plasma::Plasma KF6::ConfigCore KF
 
 install(TARGETS org.kde.ktaskmanagermenu DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/qt6/plugins/plasma/containmentactions)
 install(PROGRAMS ../ktaskmanager.py DESTINATION ${CMAKE_INSTALL_PREFIX}/bin RENAME ktaskmanager)
+install(PROGRAMS ../ktaskmanager-enable-panel-menu DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
 install(FILES ../ktaskmanager.desktop DESTINATION ${CMAKE_INSTALL_PREFIX}/share/applications)
