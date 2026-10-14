@@ -1,6 +1,6 @@
 pkgbase = ktaskmanager
 	pkgdesc = Windows 2000/7/10-style task manager for KDE Plasma, with a panel right-click entry
-	pkgver = 0.1.0
+	pkgver = 0.1.1
 	pkgrel = 1
 	url = https://github.com/tmbeck/ktaskmanager
 	install = ktaskmanager.install
@@ -19,7 +19,7 @@ pkgbase = ktaskmanager
 	optdepends = nvidia-utils: NVIDIA GPU usage
 	optdepends = plasma-systemmonitor: "Open Resource Monitor" button
 	optdepends = qt6-tools: Users > Log off (qdbus6)
-	source = ktaskmanager-0.1.0.tar.gz::https://github.com/tmbeck/ktaskmanager/archive/v0.1.0.tar.gz
-	sha256sums = e78200ca64db882c4111b75879bad46e7fc45a5ff4182da0cc29537c5b8189c4
+	source = ktaskmanager-0.1.1.tar.gz::https://github.com/tmbeck/ktaskmanager/archive/v0.1.1.tar.gz
+	sha256sums = be86bf4c82b8e04c3d8e022a47e031bbf40c602bf12b627c98d6f95e4d87d235
 
 pkgname = ktaskmanager
