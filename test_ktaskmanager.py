@@ -2,7 +2,7 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtGui import QStandardItemModel
-from ktaskmanager import KEY, nice_ceiling, sync
+from ktaskmanager import KEY, hugepages, nice_ceiling, sync
 
 assert nice_ceiling(0, 100e3) == 100e3
 assert nice_ceiling(130e3, 100e3) == 200e3
@@ -15,4 +15,7 @@ cell = lambda t: (t, t, None)
 sync(root, {1: [cell("a")], 2: [cell("b")]})
 sync(root, {2: [cell("B")], 3: [cell("c")]})  # 1 removed, 2 updated, 3 added
 assert sorted((root.child(r).data(KEY), root.child(r).text()) for r in range(root.rowCount())) == [(2, "B"), (3, "c")]
+assert hugepages({}) == "None"
+assert hugepages({"HugePages_Total": 32 * 1024, "HugePages_Free": 30 * 1024, "Hugepagesize": 2**30}) == "2/32 × 1 GB"
+assert hugepages({"HugePages_Total": 512 * 1024, "HugePages_Free": 0, "Hugepagesize": 2 * 2**20}) == "512/512 × 2 MB"
 print("ok")

@@ -60,6 +60,16 @@ def gb(n):
     return f"{n / 2**30:.1f} GB"
 
 
+def hugepages(m):
+    """'used/total × size' for the preallocated hugetlb pool; meminfo() scaled the page counts by 1024."""
+    total = m.get("HugePages_Total", 0) // 1024
+    if not total:
+        return "None"
+    used = total - m["HugePages_Free"] // 1024
+    size = m["Hugepagesize"]
+    return f"{used}/{total} × {size // 2**30} GB" if size >= 2**30 else f"{used}/{total} × {size // 2**20} MB"
+
+
 def nice_ceiling(m, floor):
     """Smallest 1/2/5 x 10^k >= m (at least floor) — graph autoscale."""
     if m <= floor:
@@ -1510,7 +1520,32 @@ class Performance10(QWidget):
         cpu = lscpu()
 
         g = Graph10(CPU10)
-        page = Page10("CPU", cpu.get("Model name", ""), [("% Utilization", g)],
+        ncpu = psutil.cpu_count() or 1
+        cores = [Graph10(CPU10) for _ in range(ncpu)]
+        cores_box = QWidget()
+        cg = QGridLayout(cores_box)
+        cg.setContentsMargins(0, 0, 0, 0)
+        cg.setSpacing(3)
+        cols = math.ceil(math.sqrt(ncpu))
+        for i, c in enumerate(cores):
+            cg.addWidget(c, i // cols, i % cols)
+        cpu_stack = QStackedWidget()
+        cpu_stack.addWidget(g)
+        cpu_stack.addWidget(cores_box)
+        settings = QSettings("ktaskmanager", "ktaskmanager")
+        cpu_stack.setCurrentIndex(int(settings.value("Windows 10/perCpu", False, bool)))
+        cpu_stack.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+
+        def cpu_menu(pos):  # Win10: right-click > Change graph to
+            menu = QMenu(self)
+            m = menu.addMenu("Change graph &to")
+            for i, name in enumerate(("&Overall utilization", "&Logical processors")):
+                a = m.addAction(name, lambda i=i: (cpu_stack.setCurrentIndex(i), settings.setValue("Windows 10/perCpu", bool(i))))
+                a.setCheckable(True)
+                a.setChecked(cpu_stack.currentIndex() == i)
+            menu.exec(cpu_stack.mapToGlobal(pos))
+        cpu_stack.customContextMenuRequested.connect(cpu_menu)
+        page = Page10("CPU", cpu.get("Model name", ""), [("% Utilization", cpu_stack)],
                       [["Utilization", "Speed"], ["Processes", "Threads", "Handles"], ["Up time"]],
                       ["Base speed", "Sockets", "Cores", "Logical processors", "Virtualization", "L1 cache", "L2 cache", "L3 cache"])
         maxmhz = float(cpu.get("CPU max MHz") or 0)
@@ -1525,18 +1560,21 @@ class Performance10(QWidget):
             freq = psutil.cpu_freq()
             ghz = f"{freq.current / 1000:.2f} GHz" if freq else ""
             g[0].push(s.cpu_total)
+            for c, v in zip(g[1:], s.cpu):
+                c.push(v)
             side.graph.push(s.cpu_total)
             side.sub.setText(f"{round(s.cpu_total)}%  {ghz}")
             page.set({"Utilization": f"{round(s.cpu_total)}%", "Speed": ghz, "Processes": str(s.nprocs),
                       "Threads": str(s.nthreads), "Handles": str(s.handles),
                       "Up time": fmt_uptime(time.time() - psutil.boot_time())})
-        self.add(SideItem("CPU", CPU10), page, [g], upd_cpu)
+        self.add(SideItem("CPU", CPU10), page, [g, *cores], upd_cpu)
 
         g, comp = Graph10(MEM10), Composition()
         total = psutil.virtual_memory().total
         page = Page10("Memory", gb(total), [("Memory usage", g)],
                       [["In use", "Available"], ["Committed", "Cached"], ["Paged pool", "Non-paged pool"]],
-                      ["Swap", "Hardware reserved"], extra=("Memory composition", comp))
+                      ["Swap", "Hardware reserved", "Huge pages", "Transparent huge pages"],
+                      extra=("Memory composition", comp))
         page.tops[0].setText(gb(total))
 
         def upd_mem(s, side, page, g):
@@ -1550,7 +1588,8 @@ class Performance10(QWidget):
             page.set({"In use": gb(used), "Available": gb(vm.available), "Cached": gb(cached),
                       "Committed": f"{m['Committed_AS'] / 2**30:.1f}/{m['CommitLimit'] / 2**30:.1f} GB",
                       "Paged pool": f"{m['SReclaimable'] // 2**20} MB", "Non-paged pool": f"{m['SUnreclaim'] // 2**20} MB",
-                      "Swap": gb(s.swap.total), "Hardware reserved": f"{max(0, m['MemTotal'] - vm.total) // 2**20} MB"})
+                      "Swap": gb(s.swap.total), "Hardware reserved": f"{max(0, m['MemTotal'] - vm.total) // 2**20} MB",
+                      "Huge pages": hugepages(m), "Transparent huge pages": gb(m.get("AnonHugePages", 0))})
         self.add(SideItem("Memory", MEM10), page, [g], upd_mem)
 
         parts = psutil.disk_partitions()
