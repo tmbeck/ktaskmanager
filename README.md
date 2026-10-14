@@ -49,10 +49,13 @@ Without them, those columns stay blank and those buttons do nothing. Everything 
 
 ## Uninstall
 
+Arch package: `sudo pacman -R ktaskmanager` (this also restores the stock panel menu).
+
+If you used `install.sh`:
+
 ```sh
 ktaskmanager-enable-panel-menu --disable   # restore the stock panel menu first
-sudo pacman -R ktaskmanager                # Arch package
-sudo xargs rm < plugin/build/install_manifest.txt   # or, if installed with install.sh
+sudo xargs rm < plugin/build/install_manifest.txt
 ```
 
 ## License

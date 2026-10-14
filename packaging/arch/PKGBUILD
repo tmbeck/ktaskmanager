@@ -1,6 +1,6 @@
 # Maintainer: Tim Beck <tmbeck@gmail.com>
 pkgname=ktaskmanager
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc="Windows 2000/7/10-style task manager for KDE Plasma, with a panel right-click entry"
 arch=(x86_64)

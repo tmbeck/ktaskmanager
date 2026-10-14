@@ -1,4 +1,13 @@
 post_install() {
   echo "To add Task Manager to the panel's right-click menu, run (as your user): ktaskmanager-enable-panel-menu"
-  echo "Before uninstalling, put the stock menu back with: ktaskmanager-enable-panel-menu --disable"
+}
+
+pre_remove() {
+  # Put the stock panel menu back for anyone using ours, or their panel loses its right-click menu.
+  for rc in /home/*/.config/plasma-org.kde.plasma.desktop-appletsrc; do
+    grep -q org.kde.ktaskmanagermenu "$rc" 2>/dev/null || continue
+    user=$(stat -c %U "$rc") uid=$(stat -c %u "$rc")
+    runuser -u "$user" -- env HOME="${rc%/.config/*}" XDG_RUNTIME_DIR=/run/user/$uid \
+      DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$uid/bus ktaskmanager-enable-panel-menu --disable || true
+  done
 }

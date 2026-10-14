@@ -123,6 +123,17 @@ def package_of(path):
     return out.splitlines()[0] if out else ""
 
 
+def disks_of(dev):
+    """Whole disks under a block device, through partitions, LUKS and LVM: '/dev/mapper/root' -> {'nvme0n1'}."""
+    sysfs = os.path.realpath(f"/sys/class/block/{os.path.basename(os.path.realpath(dev))}")
+    if not os.path.exists(sysfs):
+        return set()
+    slaves = os.listdir(f"{sysfs}/slaves") if os.path.isdir(f"{sysfs}/slaves") else []
+    if slaves:
+        return set().union(*(disks_of(f"/dev/{x}") for x in slaves))
+    return {os.path.basename(os.path.dirname(sysfs) if os.path.exists(f"{sysfs}/partition") else sysfs)}
+
+
 def meminfo():
     out = {}
     with open("/proc/meminfo") as f:
@@ -188,7 +199,17 @@ def kwin_window_action(uuid, action):
     _kwin["runner"].call("Run", f"{action}_{uuid}", "")
 
 
-def end_process(parent, pid, tree=False, confirm=True):
+def app_members(pid, kids, stop):
+    """pid plus descendants, not descending into `stop` (other apps' windows, e.g. an Okular that Dolphin opened)."""
+    out, stack = [], [pid]
+    while stack:
+        x = stack.pop()
+        out.append(x)
+        stack.extend(k for k in kids.get(x, []) if k not in stop)
+    return out
+
+
+def end_process(parent, pid, tree=False, confirm=True, app=False):
     try:
         p = psutil.Process(pid)
         name = p.name()
@@ -201,17 +222,34 @@ def end_process(parent, pid, tree=False, confirm=True):
         if QMessageBox.warning(parent, APP_NAME, msg, QMessageBox.StandardButton.Cancel | QMessageBox.StandardButton.Ok,
                                QMessageBox.StandardButton.Cancel) != QMessageBox.StandardButton.Ok:
             return
-    victims = (p.children(recursive=True) if tree else []) + [p]
-    try:
-        for v in victims:
+    if app:  # Win10 "End task" on an app: the app and its helpers, not other apps' windows started from it
+        kids = {}
+        for q in psutil.process_iter(["ppid"]):
+            kids.setdefault(q.info["ppid"], []).append(q.pid)
+        victims = []
+        for x in reversed(app_members(pid, kids, {w["pid"] for w in kwin_windows()})):  # children first, parent last
+            try:
+                victims.append(psutil.Process(x))
+            except psutil.Error:
+                pass
+    else:
+        victims = (p.children(recursive=True) if tree else []) + [p]
+    for v in victims:
+        try:
             v.terminate()
-    except psutil.AccessDenied:
-        QMessageBox.critical(parent, "Unable to Terminate Process", "The operation could not be completed.\n\nAccess is denied.")
-        return
-    except psutil.NoSuchProcess:
-        pass
-    # Windows doesn't wait politely: escalate to SIGKILL if SIGTERM was ignored.
-    QTimer.singleShot(3000, lambda: [v.kill() for v in victims if v.is_running()])
+        except psutil.NoSuchProcess:
+            pass
+        except psutil.AccessDenied:
+            QMessageBox.critical(parent, "Unable to Terminate Process", "The operation could not be completed.\n\nAccess is denied.")
+            return
+
+    def kill_leftovers():  # Windows doesn't wait politely: escalate to SIGKILL if SIGTERM was ignored.
+        for v in victims:
+            try:
+                v.kill()
+            except psutil.Error:
+                pass
+    QTimer.singleShot(3000, kill_leftovers)
 
 
 def open_file_location(pid):
@@ -1295,17 +1333,14 @@ class Processes10(QWidget):
 
         # Apps: windowed processes plus their descendants, expandable like Win10's "Google Chrome (20)"
         apps, members, claimed = {}, {}, set()
-        for w in kwin_windows():
+        wins = kwin_windows()
+        windowed = {w["pid"] for w in wins}
+        for w in wins:
             pid = w["pid"]
             if pid not in info or pid in claimed:
                 continue
-            stack, m = [pid], []
-            while stack:
-                x = stack.pop()
-                if x not in claimed:
-                    claimed.add(x)
-                    m.append(x)
-                    stack.extend(kids.get(x, []))
+            m = app_members(pid, kids, windowed | claimed)
+            claimed.update(m)
             members[pid] = m
             name = w["name"] + (f" ({len(m)})" if len(m) > 1 else "")
             engine = next((info[x]["engine"] for x in m if info[x]["engine"]), "")
@@ -1334,7 +1369,7 @@ class Processes10(QWidget):
         if isinstance(pid, int):
             # Win10 "End task" doesn't ask; on an app it ends the whole app
             item = self.tree.model_.itemFromIndex(self.tree.proxy.mapToSource(self.tree.currentIndex()).siblingAtColumn(0))
-            end_process(self, pid, tree=item.parent() is self.groups[0], confirm=False)
+            end_process(self, pid, confirm=False, app=item.parent() is self.groups[0])
 
     def menu(self, pos):
         pid = selected_key(self.tree)
@@ -1575,7 +1610,7 @@ class Performance10(QWidget):
         total = psutil.virtual_memory().total
         page = Page10("Memory", gb(total), [("Memory usage", g)],
                       [["In use", "Available"], ["Committed", "Cached"], ["Paged pool", "Non-paged pool"]],
-                      ["Swap", "Hardware reserved", "Huge pages", "Transparent huge pages"],
+                      ["Swap", "Huge pages", "Transparent huge pages"],
                       extra=("Memory composition", comp))
         page.tops[0].setText(gb(total))
 
@@ -1590,15 +1625,14 @@ class Performance10(QWidget):
             page.set({"In use": gb(used), "Available": gb(vm.available), "Cached": gb(cached),
                       "Committed": f"{m['Committed_AS'] / 2**30:.1f}/{m['CommitLimit'] / 2**30:.1f} GB",
                       "Paged pool": f"{m['SReclaimable'] // 2**20} MB", "Non-paged pool": f"{m['SUnreclaim'] // 2**20} MB",
-                      "Swap": gb(s.swap.total), "Hardware reserved": f"{max(0, m['MemTotal'] - vm.total) // 2**20} MB",
-                      "Huge pages": hugepages(m), "Transparent huge pages": gb(m.get("AnonHugePages", 0))})
+                      "Swap": gb(s.swap.total), "Huge pages": hugepages(m), "Transparent huge pages": gb(m.get("AnonHugePages", 0))})
         self.add(SideItem("Memory", MEM10), page, [g], upd_mem)
 
         parts = psutil.disk_partitions()
-        swaps = open("/proc/swaps").read()
+        swaps = set().union(*(disks_of(l.split()[0]) for l in open("/proc/swaps").read().splitlines()[1:]))
         for i, d in enumerate(sampler.disks):
             act, rate = Graph10(DISK10), Graph10(DISK10, autoscale_floor=2**20, second=True)
-            mine = [p for p in parts if p.device.startswith(f"/dev/{d}")]
+            mine = [p for p in parts if d in disks_of(p.device)]
             mount = next((p.mountpoint for p in sorted(mine, key=lambda p: len(p.mountpoint))), "")
             model_path = f"/sys/block/{d}/device/model"
             model = open(model_path).read().strip() if os.path.exists(model_path) else d
@@ -1606,11 +1640,16 @@ class Performance10(QWidget):
                           [["Active time", "Average response time"], ["Read speed", "Write speed"]],
                           ["Capacity", "Formatted", "System disk", "Page file", "Type"])
             rot = open(f"/sys/block/{d}/queue/rotational").read().strip() == "1"
-            formatted = sum(psutil.disk_usage(p.mountpoint).total for p in mine)
+            formatted = 0
+            for mnt in {p.device: p.mountpoint for p in mine}.values():  # once per filesystem, not per btrfs subvolume
+                try:
+                    formatted += psutil.disk_usage(mnt).total
+                except OSError:  # e.g. mounted under another user's /run/media
+                    pass
             page.set({"Capacity": gb(int(open(f"/sys/block/{d}/size").read()) * 512),
                       "Formatted": gb(formatted) if formatted else "", "Type": "HDD" if rot else "SSD",
                       "System disk": "Yes" if any(p.mountpoint == "/" for p in mine) else "No",
-                      "Page file": "Yes" if f"/dev/{d}" in swaps else "No"})
+                      "Page file": "Yes" if d in swaps else "No"})
             page.tops[0].setText("100%")
 
             def upd_disk(s, side, page, g, d=d):
@@ -1801,8 +1840,11 @@ class Startup(QWidget):
         f = self.table.selected_key()
         if f not in self.entries:
             return
-        lines = [l for l in open(self.entries[f][1], encoding="utf-8").read().splitlines() if not l.startswith("Hidden=")]
-        lines.insert(lines.index("[Desktop Entry]") + 1, f"Hidden={'false' if self.disabled(f) else 'true'}")
+        lines = [l for l in open(self.entries[f][1], encoding="utf-8-sig").read().splitlines() if not l.startswith("Hidden=")]
+        at = next((i + 1 for i, l in enumerate(lines) if l.strip() == "[Desktop Entry]"), None)
+        if at is None:
+            lines, at = ["[Desktop Entry]"] + lines, 1
+        lines.insert(at, f"Hidden={'false' if self.disabled(f) else 'true'}")
         os.makedirs(AUTOSTART, exist_ok=True)
         with open(os.path.join(AUTOSTART, f), "w", encoding="utf-8") as out:
             out.write("\n".join(lines) + "\n")
@@ -1879,7 +1921,7 @@ class Compact10(QWidget):
 
     def end(self):
         if (w := self.current()) and w["pid"]:
-            end_process(self, w["pid"], tree=True, confirm=False)
+            end_process(self, w["pid"], confirm=False, app=True)
 
     def menu(self, pos):
         w = self.current()
@@ -2129,8 +2171,11 @@ class Base(QMainWindow):
         cmd, ok = QInputDialog.getText(self, "Create New Task", "Type the name of a program, folder, document, or Internet "
                                        "resource, and it will be opened for you.\n\nOpen:")
         if ok and cmd.strip():
-            args = shlex.split(cmd)
-            if not QProcess.startDetached(args[0], args[1:]):
+            try:
+                args = shlex.split(cmd)
+            except ValueError:  # unbalanced quote, e.g. a path with an apostrophe
+                args = [cmd]
+            if not args or not QProcess.startDetached(args[0], args[1:]):
                 QProcess.startDetached("xdg-open", [cmd])
 
     def switch_style(self, name):

@@ -8,8 +8,9 @@ want=org.kde.ktaskmanagermenu
 [ "$1" = --disable ] && want=org.kde.contextmenu
 if [ "$(kreadconfig6 --file "$rc" --group ActionPlugins --group 1 --key "$key")" != "$want" ]; then
     # plasmashell rewrites its config on exit, so edit while it's stopped. [ActionPlugins][1] = panels.
-    systemctl --user stop plasma-plasmashell
+    running=$(systemctl --user is-active -q plasma-plasmashell 2>/dev/null && echo 1 || true)
+    [ -z "$running" ] || systemctl --user stop plasma-plasmashell
     kwriteconfig6 --file "$rc" --group ActionPlugins --group 1 --key "$key" "$want"
-    systemctl --user start plasma-plasmashell
+    [ -z "$running" ] || systemctl --user start plasma-plasmashell
 fi
 echo "Panel right-click menu: $want"
